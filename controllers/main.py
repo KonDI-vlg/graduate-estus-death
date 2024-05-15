@@ -7,16 +7,17 @@ from robot_controller import RobotController
 import time
 
 if __name__ == '__main__':
-    SIMULATION_STEP_DELAY = 2000
+    SIMULATION_STEP_DELAY = 1000
     N_EPISODES = 10000
-    MAX_STEPS = 200
-    EPSILON = 0.05
+    MAX_STEPS = 300
+    EPSILON = 0.7
+    L2_FACTOR = 1e-6
     LEARNING_RATE = 0.0025
     N_ACTIONS = 3
     LOAD_CHECKPOINT = False
 
     env = RobotController(SIMULATION_STEP_DELAY)
-    agent = Agent(lr=LEARNING_RATE, n_actions=N_ACTIONS, epsilon=EPSILON)
+    agent = Agent(lr=LEARNING_RATE, n_actions=N_ACTIONS, epsilon=EPSILON, l2_factor=L2_FACTOR)
 
     best_score = -np.inf
     score_history = []
@@ -31,9 +32,10 @@ if __name__ == '__main__':
         done = False
         steps = 0
         score = 0
+        agent.epsilon = EPSILON * 0.99**i
         while not done:
             action = agent.choose_action(observation)
-            next_observation, reward, done = env.step(action)
+            next_observation, reward, done = env.step(action,steps)
             score += reward
             if not LOAD_CHECKPOINT:
                 agent.train_step(observation, reward, next_observation, done)

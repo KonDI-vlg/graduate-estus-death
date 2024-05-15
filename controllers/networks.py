@@ -8,7 +8,7 @@ from tensorflow.keras.optimizers import Adam
 import numpy as np
 
 class ActorNetwork(keras.Model):
-    def __init__(self, n_actions=3, dense1_dims=64, dense2_dims=64,
+    def __init__(self, n_actions=3, dense1_dims=64, dense2_dims=64, l2_factor=0.01,
                  name='actor', chkpt_dir='tmp\\actor'):
         super(ActorNetwork, self).__init__()
         self.dense1 = Dense(dense1_dims, activation='relu')
@@ -23,7 +23,7 @@ class ActorNetwork(keras.Model):
         return probs
     
 class CriticNetwork(keras.Model):
-    def __init__(self, dense1_dims=64, dense2_dims=64,
+    def __init__(self, dense1_dims=64, dense2_dims=64, l2_factor=0.01,
                  name='critic', chkpt_dir='tmp\\critic'):
         super(CriticNetwork, self).__init__()
         self.dense1 = Dense(dense1_dims, activation='relu')
@@ -37,44 +37,16 @@ class CriticNetwork(keras.Model):
         critic_value = self.critic_value(value)
         return critic_value
 
-
-class ActorCriticNetwork(keras.Model):
-    def __init__(self, n_actions=3, dense1_dims=64, dense2_dims=64,
-                 name='actor_critic', chkpt_dir='tmp\\actor_critic'):
-        super(ActorCriticNetwork, self).__init__()
-        self.dense1_dims = dense1_dims
-        self.dense2_dims = dense2_dims
-
-        self.n_action = n_actions
-        self.model_name = name
-        self.checkpoint_dir = chkpt_dir
-        self.checkpoint_file = os.path.join(self.checkpoint_dir, name + '_ac.weights.h5')
-
-        self.dense1 = Dense(self.dense1_dims, activation='relu')
-        self.dense2 = Dense(self.dense2_dims, activation='relu')
-        self.critic_value = Dense(1, activation=None)
-        self.actor_probs = Dense(n_actions, activation='softmax')
-
-    def call(self, state):
-        value = self.dense1(state)
-        value = self.dense2(value)
-
-        critic_value = self.critic_value(value)
-        actor_probs = self.actor_probs(value)
-
-        return critic_value, actor_probs
-
-
 class Agent:
-    def __init__(self, lr=0.001, gamma=0.95, epsilon=0.1, n_actions=3):
+    def __init__(self, lr=0.001, gamma=0.95, epsilon=0.1, l2_factor=0.01, n_actions=3):
         self.gamma = gamma
         self.epsilon = epsilon
         self.n_actions = n_actions
         self.action = 0
         self.action_space = [i for i in range(self.n_actions)]
 
-        self.actor = ActorNetwork(n_actions=n_actions)
-        self.critic = CriticNetwork()
+        self.actor = ActorNetwork(n_actions=n_actions, l2_factor=l2_factor)
+        self.critic = CriticNetwork(l2_factor=l2_factor)
         
         self.actor.compile(optimizer=Adam(learning_rate=lr))
         self.critic.compile(optimizer=Adam(learning_rate=lr))
@@ -85,11 +57,10 @@ class Agent:
         state = tf.convert_to_tensor([observation])
         probs = self.actor(state)
 
-        action_probabilities = tfp.distributions.Categorical(probs=probs)
-        action = action_probabilities.sample()
-        self.action = action
+        action = tf.random.categorical(tf.math.log(probs), 1)
+        self.action = action.numpy()[0, 0]
 
-        return action.numpy()[0]
+        return self.action
 
     def save_models(self):
         print("---- saving models ----")
@@ -113,12 +84,10 @@ class Agent:
             print("Input contains NaN")
             return
 
-        with tf.GradientTape() as tape:
-            state_value, probs = self.actor_critic(state)
-            next_state_value, _ = self.actor_critic(next_state)
-
-            state_value = tf.squeeze(state_value)
-            next_state_value = tf.squeeze(next_state_value)
+        with tf.GradientTape() as tape1, tf.GradientTape() as tape2:
+            state_value = tf.squeeze(self.critic(state))
+            next_state_value = tf.squeeze(self.critic(next_state))
+            probs = self.actor(state)
 
             action_probs = tfp.distributions.Categorical(probs=probs)
             log_prob = action_probs.log_prob(self.action)
@@ -128,9 +97,11 @@ class Agent:
             actor_loss = -log_prob * delta
             critic_loss = delta ** 2
 
-            total_loss = actor_loss * 0.8 + critic_loss * 0.6
+        actor_gradients = tape1.gradient(actor_loss, self.actor.trainable_variables)
+        critic_gradients = tape2.gradient(critic_loss, self.critic.trainable_variables)
 
-        gradient = tape.gradient(total_loss, self.actor_critic.trainable_variables)
-        gradient, _ = tf.clip_by_global_norm(gradient, 1.0)
-        self.actor_critic.optimizer.apply_gradients(zip(gradient, self.actor_critic.trainable_variables))
-    
+        actor_gradients, _ = tf.clip_by_global_norm(actor_gradients, 1.0)
+        critic_gradients, _ = tf.clip_by_global_norm(critic_gradients, 1.0)
+
+        self.actor.optimizer.apply_gradients(zip(actor_gradients, self.actor.trainable_variables))
+        self.critic.optimizer.apply_gradients(zip(critic_gradients, self.critic.trainable_variables))

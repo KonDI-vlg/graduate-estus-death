@@ -43,28 +43,29 @@ class RobotController:
         observation = self.get_center_row()
         return observation
 
-    def step(self, action):
+    def step(self, action, steps_cnt):
         done = False
         if action == 0:
             self.move_forward()
             self.supervisor.step(self.simulation_delay)
             self.do_forward.append(True)
-            reward = 1
+            reward = 2
         elif action == 1:
             self.move_right()
             self.supervisor.step(self.simulation_delay)
             self.do_forward = []
-            reward = -1
+            reward = 0.1
         elif action == 2:
             self.move_left()
             self.supervisor.step(self.simulation_delay)
             self.do_forward = []
-            reward = -1
+            reward = 0.1
         else:
             reward = 0
 
         observation = self.get_center_row()
         self.observation = observation
+
         min_val = min(observation)
         if 0 <= min_val <= 0.21:
             reward -= 200
@@ -72,7 +73,7 @@ class RobotController:
         if 0.21 < min_val < 0.4:
             reward -= 1/(min_val)
         elif len(self.do_forward) == 2 and all(self.do_forward):
-            reward += 10
+            reward += 5
 
         return observation, reward, done
 
