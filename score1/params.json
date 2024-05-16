@@ -1,0 +1,12 @@
+{
+    "n_episodes": 10000,
+    "max_steps": 300,
+    "activation": "tanh",
+    "dense1_dims": 128,
+    "dense2_dims": 64,
+    "epsilon": 0.7,
+    "l2_factor": 0,
+    "learning_rate": 0.00001,
+    "simulation_step_delay": 500,
+    "base_speed": 3
+}
