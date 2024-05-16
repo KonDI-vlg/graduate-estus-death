@@ -9,7 +9,7 @@ import numpy as np
 
 class ActorNetwork(keras.Model):
     def __init__(self, n_actions=3, dense1_dims=128, dense2_dims=128, l2_factor=0.01,
-                 name='actor', chkpt_dir='tmp\\actor'):
+                 name='actor', chkpt_dir='tmp/actor'):
         super(ActorNetwork, self).__init__()
         self.dense1 = Dense(dense1_dims, activation='sigmoid', kernel_regularizer=l2(l2_factor))
         self.dense2 = Dense(dense2_dims, activation='sigmoid', kernel_regularizer=l2(l2_factor))
@@ -24,7 +24,7 @@ class ActorNetwork(keras.Model):
     
 class CriticNetwork(keras.Model):
     def __init__(self, dense1_dims=128, dense2_dims=128, l2_factor=0.01,
-                 name='critic', chkpt_dir='tmp\\critic'):
+                 name='critic', chkpt_dir='tmp/critic'):
         super(CriticNetwork, self).__init__()
         self.dense1 = Dense(dense1_dims, activation='tanh', kernel_regularizer=l2(l2_factor))
         self.dense2 = Dense(dense2_dims, activation='tanh', kernel_regularizer=l2(l2_factor))
