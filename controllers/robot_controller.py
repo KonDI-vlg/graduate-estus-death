@@ -6,10 +6,10 @@ import tensorflow_probability as tfp
 
 
 class RobotController:
-    def __init__(self, simulation_delay):
+    def __init__(self, simulation_delay, robot_base_speed):
         self.supervisor = Supervisor()
         self.simulation_delay = simulation_delay
-        self.base_speed = 1
+        self.base_speed = robot_base_speed
 
         self.front_left_motor = self.supervisor.getDevice("fl_wheel_joint")
         self.front_right_motor = self.supervisor.getDevice("fr_wheel_joint")
@@ -43,23 +43,23 @@ class RobotController:
         observation = self.get_center_row()
         return observation
 
-    def step(self, action, steps_cnt):
+    def step(self, action):
         done = False
         if action == 0:
             self.move_forward()
             self.supervisor.step(self.simulation_delay)
             self.do_forward.append(True)
-            reward = 2
+            reward = 1
         elif action == 1:
             self.move_right()
             self.supervisor.step(self.simulation_delay)
             self.do_forward = []
-            reward = 0.1
+            reward = -0.2
         elif action == 2:
             self.move_left()
             self.supervisor.step(self.simulation_delay)
             self.do_forward = []
-            reward = 0.1
+            reward = -0.2
         else:
             reward = 0
 
@@ -72,7 +72,7 @@ class RobotController:
             done = True
         if 0.21 < min_val < 0.4:
             reward -= 1/(min_val)
-        elif len(self.do_forward) == 2 and all(self.do_forward):
+        elif len(self.do_forward) == 2:
             reward += 5
 
         return observation, reward, done
@@ -103,7 +103,7 @@ class RobotController:
     # ///////////////////////////// CAMERA ////////////////////////#
     def get_center_row(self):
         depth_image = self.camera_depth.getRangeImage()
-        center_row = depth_image[480 // 2 * 640:(480 // 2 + 1) * 640:11]
+        center_row = depth_image[480 // 2 * 640:(480 // 2 + 1) * 640:3]
         self.camera_observation = center_row
         return center_row
     # ///////////////////////////// CAMERA ////////////////////////#
