@@ -11,8 +11,8 @@ class ActorNetwork(keras.Model):
     def __init__(self, n_actions=3, dense1_dims=128, dense2_dims=128, l2_factor=0.01,
                  name='actor', chkpt_dir='tmp/actor'):
         super(ActorNetwork, self).__init__()
-        self.dense1 = Dense(dense1_dims, activation='sigmoid', kernel_regularizer=l2(l2_factor))
-        self.dense2 = Dense(dense2_dims, activation='sigmoid', kernel_regularizer=l2(l2_factor))
+        self.dense1 = Dense(dense1_dims, activation='relu', kernel_regularizer=l2(l2_factor))
+        self.dense2 = Dense(dense2_dims, activation='relu', kernel_regularizer=l2(l2_factor))
         self.actor_probs = Dense(n_actions, activation='softmax')
         self.checkpoint_file = os.path.join(chkpt_dir, name + '_actor.weights.h5')
 
@@ -87,7 +87,7 @@ class Agent:
             print("Input contains NaN")
             return
 
-        with tf.GradientTape() as tape1:
+        with tf.GradientTape(persistent=True) as tape:
             state_value = tf.squeeze(self.critic(state))
             next_state_value = tf.squeeze(self.critic(next_state))
             probs = self.actor(state)
@@ -97,14 +97,15 @@ class Agent:
 
             delta = reward + self.gamma * next_state_value * (1 - int(done)) - state_value
 
-            #actor_loss = -log_prob * delta
-            #critic_loss = delta ** 2
-            critic_loss = tf.keras.losses.MSE(delta, state_value)
-        critic_gradients = tape1.gradient(critic_loss, self.critic.trainable_variables)
+            critic_loss = tf.math.square(delta)
+
+            actor_loss = -log_prob * delta
+            actor_loss = tf.math.reduce_mean(actor_loss)
+
+        critic_gradients = tape.gradient(critic_loss, self.critic.trainable_variables)
         self.critic.optimizer.apply_gradients(zip(critic_gradients, self.critic.trainable_variables))
 
-        with tf.GradientTape() as tape2:
-            actor_loss = - self.critic(state)
-            actor_loss = tf.math.reduce_mean(actor_loss)
-        actor_gradients = tape2.gradient(actor_loss, self.actor.trainable_variables)
+        actor_gradients = tape.gradient(actor_loss, self.actor.trainable_variables)
         self.actor.optimizer.apply_gradients(zip(actor_gradients, self.actor.trainable_variables))
+
+        del tape                 

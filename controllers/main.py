@@ -31,8 +31,8 @@ if __name__ == '__main__':
     MAX_STEPS = 600
     LOAD_CHECKPOINT = False
 
-    ACTOR_DIMS = [32,32]
-    CRITIC_DIMS = [32,32]
+    ACTOR_DIMS = [128,64]
+    CRITIC_DIMS = [128,64]
     EPSILON = 0.5
     L2_FACTOR = 1e-2
     LEARNING_RATE = 1e-4

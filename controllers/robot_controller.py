@@ -1,5 +1,5 @@
 import os
-os.environ["WEBOTS_HOME"] = "Z:\Webots"
+os.environ["WEBOTS_HOME"] = "/Applications/Webots.app"
 from controller import Supervisor
 import tensorflow as tf
 import tensorflow_probability as tfp
