@@ -6,10 +6,11 @@ import tensorflow_probability as tfp
 
 
 class RobotController:
-    def __init__(self, simulation_delay, robot_base_speed):
+    def __init__(self, simulation_delay, robot_base_speed, screen_divider):
         self.supervisor = Supervisor()
         self.simulation_delay = simulation_delay
         self.base_speed = robot_base_speed
+        self.screen_divider = screen_divider
 
         self.front_left_motor = self.supervisor.getDevice("fl_wheel_joint")
         self.front_right_motor = self.supervisor.getDevice("fr_wheel_joint")
@@ -71,7 +72,7 @@ class RobotController:
             reward -= 200
             done = True
         if 0.21 < min_val < 0.4:
-            reward -= 1/(min_val)
+            reward -= 0.3
         elif len(self.do_forward) == 2:
             reward += 5
 
@@ -103,7 +104,7 @@ class RobotController:
     # ///////////////////////////// CAMERA ////////////////////////#
     def get_center_row(self):
         depth_image = self.camera_depth.getRangeImage()
-        center_row = depth_image[480 // 2 * 640:(480 // 2 + 1) * 640:3]
+        center_row = depth_image[480 // 2 * 640:(480 // 2 + 1) * 640:self.screen_divider]
         self.camera_observation = center_row
         return center_row
     # ///////////////////////////// CAMERA ////////////////////////#
