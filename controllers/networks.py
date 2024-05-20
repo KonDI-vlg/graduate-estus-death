@@ -45,14 +45,11 @@ class ReplayBuffer:
         return states, actions, rewards, states_, dones
 
 class ActorNetwork(keras.Model):
-    def __init__(self, n_actions=3, dense1_dims=128, dense2_dims=128, l2_factor=0.01,
-                 name='actor', chkpt_dir='tmp\\actor'):
+    def __init__(self, n_actions=3, dense1_dims=128, dense2_dims=128, l2_factor=0.01):
         super(ActorNetwork, self).__init__()
         self.dense1 = Dense(dense1_dims, activation='sigmoid', kernel_regularizer=l2(l2_factor))
         self.dense2 = Dense(dense2_dims, activation='sigmoid', kernel_regularizer=l2(l2_factor))
         self.mu = Dense(n_actions, activation='softmax')
-
-        self.checkpoint_file = os.path.join(chkpt_dir, name + '_actor.weights.h5')
 
     def call(self, state):
         prob = self.dense1(state)
@@ -61,14 +58,11 @@ class ActorNetwork(keras.Model):
         return mu
     
 class CriticNetwork(keras.Model):
-    def __init__(self, dense1_dims=128, dense2_dims=128, l2_factor=0.01,
-                 name='critic', chkpt_dir='tmp\\critic'):
+    def __init__(self, dense1_dims=128, dense2_dims=128, l2_factor=0.01):
         super(CriticNetwork, self).__init__()
         self.dense1 = Dense(dense1_dims, activation='sigmoid', kernel_regularizer=l2(l2_factor))
         self.dense2 = Dense(dense2_dims, activation='sigmoid', kernel_regularizer=l2(l2_factor))
         self.q_value = Dense(1, activation=None)
-
-        self.checkpoint_file = os.path.join(chkpt_dir, name + '_critic.weights.h5')
 
     def call(self, state, action):
         action_value = self.dense1(tf.concat([state,action], axis=1))
@@ -87,9 +81,10 @@ class Agent:
         self.actor_dims = params['ACTOR_DIMS']
         self.critic_dims = params['CRITIC_DIMS']
 
-        self.batch_max_size = params['BATCH_MAX_SIZE']
+        self.batch_size = params['BATCH_SIZE']
+        self.buffer_max_size = params['BUFFER_MAX_SIZE']
         self.n_actions = params['N_ACTIONS']
-        self.memory = ReplayBuffer(self.batch_max_size, params['STATE_SHAPE'], self.n_actions)
+        self.memory = ReplayBuffer(self.buffer_max_size, params['STATE_SHAPE'], self.n_actions)
 
         self.actor = ActorNetwork(self.n_actions, self.actor_dims[0], self.actor_dims[1], self.l2_factor) # self.n_actions, self.actor_dims[0], self.actor_dims[1], self.l2_factor
         self.critic = CriticNetwork(self.critic_dims[0], self.critic_dims[1], self.l2_factor) # self.critic_dims[0], self.critic_dims[1], self.l2_factor
@@ -102,6 +97,8 @@ class Agent:
         self.critic.compile(optimizer=Adam(learning_rate=self.learning_rate))
         self.target_actor.compile(optimizer=Adam(learning_rate=self.learning_rate))
         self.target_critic.compile(optimizer=Adam(learning_rate=self.learning_rate))
+
+        self.chkpt_dir='tmp'
 
         self.update_network_parameters(tau=1)
         
@@ -122,9 +119,9 @@ class Agent:
         return one_hot_action
 
     @tf.function
-    def train_step(self):
+    def train_step(self, state, action, reward, next_state, done):
         
-        state, action, reward, next_state, done = self.memory.sample_batch(self.batch_max_size)
+        #state, action, reward, next_state, done = self.memory.sample_batch(self.batch_size)
 
         states = tf.convert_to_tensor(state, dtype=tf.float32)
         actions = tf.convert_to_tensor(action, dtype=tf.float32)
@@ -179,13 +176,15 @@ class Agent:
             target.assign(self.tau * current + (1 - self.tau) * target)
 
     def save_models(self):
-        print("---- saving models ----")
-        os.makedirs(os.path.dirname(self.actor.checkpoint_file), exist_ok=True)
-        self.actor.save_weights(self.actor.checkpoint_file)
-        os.makedirs(os.path.dirname(self.critic.checkpoint_file), exist_ok=True)
-        self.critic.save_weights(self.critic.checkpoint_file)
-
+        print('... saving models ...')
+        self.actor.save_weights(os.path.join(self.chkpt_dir, 'actor.weights.h5'))
+        self.critic.save_weights(os.path.join(self.chkpt_dir, 'critic.weights.h5'))
+        self.target_actor.save_weights(os.path.join(self.chkpt_dir, 'target_actor.weights.h5'))
+        self.target_critic.save_weights(os.path.join(self.chkpt_dir, 'target_critic.weights.h5'))
+    
     def load_models(self):
-        print("---- loading models ----")
-        self.actor.load_weights(self.actor.checkpoint_file)
-        self.critic.load_weights(self.critic.checkpoint_file)
+        print('... loading models ...')
+        self.actor.load_weights(os.path.join(self.chkpt_dir, 'actor.weights.h5'))
+        self.critic.load_weights(os.path.join(self.chkpt_dir, 'critic.weights.h5'))
+        self.target_actor.load_weights(os.path.join(self.chkpt_dir, 'target_actor.weights.h5'))
+        self.target_critic.load_weights(os.path.join(self.chkpt_dir, 'target_critic.weights.h5'))
