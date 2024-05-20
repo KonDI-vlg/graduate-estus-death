@@ -12,11 +12,13 @@ import matplotlib.pyplot as plt
 def plot_scores(episodes, scores, avg_scores):
     plt.figure(1)
     plt.clf()
+
     plt.subplot(2, 1, 1)
     plt.plot(episodes, scores, label='Score')
     plt.xlabel('Episode')
     plt.ylabel('Score')
     plt.title('Score over Episodes')
+
     plt.subplot(2, 1, 2)
     plt.plot(episodes, avg_scores, label='Avg Score', color='orange')
     plt.xlabel('Episode')
@@ -33,17 +35,17 @@ if __name__ == '__main__':
     ROBOT_BASE_SPEED = 3
     SCREEN_DIVIDER = 3
 
-    N_EPISODES = 10000
+    N_EPISODES = 40000
     MAX_STEPS = 600
     LOAD_CHECKPOINT = False
 
     AGENT_PARAMS = {
         # YOU CAN CHANGE
-        "ACTOR_DIMS": [128,128],
-        "CRITIC_DIMS": [128,128],
+        "ACTOR_DIMS": [64,64],
+        "CRITIC_DIMS": [64,64],
         "BATCH_MAX_SIZE": 64,
         "GAMMA": 0.99,
-        "EPSILON": 1.0,
+        "EPSILON": 0.7,
         "TAU": 0.005,
         "LEARNING_RATE": 1e-4,
         "L2_FACTOR": 1e-2,
@@ -60,6 +62,10 @@ if __name__ == '__main__':
 
     best_score = -np.inf
     score_history = []
+    avg_scores = []
+    actor_loss_history = []
+    critic_loss_history = []
+
     #agent.load_models()
 
     if LOAD_CHECKPOINT:
@@ -84,12 +90,15 @@ if __name__ == '__main__':
             
             if not LOAD_CHECKPOINT:
                 agent.add_experience(observation,action,reward,next_observation,done)
-                agent.train_step()
+                if agent.memory.buffer_cnt > agent.batch_max_size:
+                    agent.train_step()
+                
 
             observation = next_observation
 
         score_history.append(score)
         avg_score = np.mean(score_history[-100:])
+        avg_scores.append(avg_score)
 
         if avg_score > best_score:
             best_score = avg_score
@@ -100,11 +109,10 @@ if __name__ == '__main__':
             n = round(time.time() - start, 0)
             print(f"Elapsed time: {int(n // 3600)} h {int(n % 3600 // 60)} m {int(n % 60)} s")
 
-        print(f"Ep:{i + 1}/{N_EPISODES}, Score: {round(score, 2)}, Avg score: {round(avg_score, 2)}")
+        print(f"Ep:{i + 1}/{N_EPISODES}, Sc: {round(score, 2)}, Avg: {round(avg_score, 2)}")
 
         # Тут где-то можешь сделать свой график
 
         episodes = range(1, len(score_history) + 1)
-        avg_scores = [np.mean(score_history[max(0, j-99):j+1]) for j in range(len(score_history))]
         plot_scores(episodes, score_history, avg_scores)
 

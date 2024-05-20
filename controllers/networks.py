@@ -30,7 +30,7 @@ class ReplayBuffer:
         self.dones[index] = done
 
         self.buffer_cnt += 1
-        #print(f"Added exp\nBuff cnt={self.buffer_cnt}")
+        #print(f"Buff cnt={self.buffer_cnt}")
 
     def sample_batch(self, batch_size):
         max_mem = min(self.buffer_cnt, self.buffer_size)
@@ -48,8 +48,8 @@ class ActorNetwork(keras.Model):
     def __init__(self, n_actions=3, dense1_dims=128, dense2_dims=128, l2_factor=0.01,
                  name='actor', chkpt_dir='tmp\\actor'):
         super(ActorNetwork, self).__init__()
-        self.dense1 = Dense(dense1_dims, activation='relu', kernel_regularizer=l2(l2_factor))
-        self.dense2 = Dense(dense2_dims, activation='relu', kernel_regularizer=l2(l2_factor))
+        self.dense1 = Dense(dense1_dims, activation='sigmoid', kernel_regularizer=l2(l2_factor))
+        self.dense2 = Dense(dense2_dims, activation='sigmoid', kernel_regularizer=l2(l2_factor))
         self.mu = Dense(n_actions, activation='softmax')
 
         self.checkpoint_file = os.path.join(chkpt_dir, name + '_actor.weights.h5')
@@ -64,8 +64,8 @@ class CriticNetwork(keras.Model):
     def __init__(self, dense1_dims=128, dense2_dims=128, l2_factor=0.01,
                  name='critic', chkpt_dir='tmp\\critic'):
         super(CriticNetwork, self).__init__()
-        self.dense1 = Dense(dense1_dims, activation='relu', kernel_regularizer=l2(l2_factor))
-        self.dense2 = Dense(dense2_dims, activation='relu', kernel_regularizer=l2(l2_factor))
+        self.dense1 = Dense(dense1_dims, activation='sigmoid', kernel_regularizer=l2(l2_factor))
+        self.dense2 = Dense(dense2_dims, activation='sigmoid', kernel_regularizer=l2(l2_factor))
         self.q_value = Dense(1, activation=None)
 
         self.checkpoint_file = os.path.join(chkpt_dir, name + '_critic.weights.h5')
@@ -95,6 +95,8 @@ class Agent:
         self.critic = CriticNetwork(self.critic_dims[0], self.critic_dims[1], self.l2_factor) # self.critic_dims[0], self.critic_dims[1], self.l2_factor
         self.target_actor = ActorNetwork(self.n_actions, self.actor_dims[0], self.actor_dims[1], self.l2_factor)
         self.target_critic = CriticNetwork(self.critic_dims[0], self.critic_dims[1], self.l2_factor)
+        self.target_actor.set_weights(self.actor.get_weights())
+        self.target_critic.set_weights(self.critic.get_weights())
         
         self.actor.compile(optimizer=Adam(learning_rate=self.learning_rate))
         self.critic.compile(optimizer=Adam(learning_rate=self.learning_rate))
@@ -121,8 +123,6 @@ class Agent:
 
     @tf.function
     def train_step(self):
-        if self.memory.buffer_cnt < self.batch_max_size:
-            return
         
         state, action, reward, next_state, done = self.memory.sample_batch(self.batch_max_size)
 
@@ -133,35 +133,28 @@ class Agent:
         dones = tf.convert_to_tensor(done, dtype=tf.bool)
         dones = tf.cast(dones, dtype=tf.float32)
 
-        target_actions_probs = self.target_actor(next_states)
-        target_actions = tf.math.argmax(target_actions_probs,axis=1)
-        target_actions = tf.one_hot(target_actions, self.n_actions)
-
-        critic_next_value = tf.squeeze(self.target_critic(next_states, target_actions),1)
-        critic_value = tf.squeeze(self.critic(states,actions),1)
-
-        target = rewards + self.gamma * critic_next_value * (1-dones)
-        target = tf.reshape(target, (-1,1))
+        #target = tf.reshape(target, (-1,1))
 
         with tf.GradientTape() as tape:
+            target_actions_probs = self.target_actor(next_states)
+            critic_next_value = tf.squeeze(self.target_critic(next_states, target_actions_probs),1)
+            critic_value = tf.squeeze(self.critic(states,actions),1)
+            target = rewards + self.gamma * critic_next_value * (1-dones)
             critic_loss = tf.keras.losses.MSE(target, critic_value)
         critic_network_gradient = tape.gradient(critic_loss, self.critic.trainable_variables)
         self.critic.optimizer.apply_gradients(zip(critic_network_gradient, self.critic.trainable_variables))
 
         with tf.GradientTape() as tape:
             new_policy_actions = self.actor(states)
-            new_policy_actions = tf.math.argmax(new_policy_actions, axis=1)
-            new_policy_actions = tf.one_hot(new_policy_actions, self.n_actions)
             actor_loss = -self.critic(states, new_policy_actions)
             actor_loss = tf.math.reduce_mean(actor_loss)
         actor_network_gradient = tape.gradient(actor_loss, self.actor.trainable_variables)
         self.actor.optimizer.apply_gradients(zip(actor_network_gradient, self.actor.trainable_variables))
 
-        self.update_target_networks()
+        self.update_network_parameters()
 
     @tf.function
     def update_network_parameters(self, tau=None):
-        print("...updating params...")
         if tau is None:
             tau = self.tau
         weights = []
@@ -175,13 +168,14 @@ class Agent:
         for i, weight in enumerate(self.critic.weights):
             weights.append(weight * tau + targets[i]*(1-tau))
         self.target_critic.set_weights(weights)
+        
 
     @tf.function
     def update_target_networks(self):
-        for target, current in zip(self.target_actor.trainable_variables, self.actor.trainable_variables):
+        for target, current in zip(self.target_actor.variables, self.actor.variables):
             target.assign(self.tau * current + (1 - self.tau) * target)
 
-        for target, current in zip(self.target_critic.trainable_variables, self.critic.trainable_variables):
+        for target, current in zip(self.target_critic.variables, self.critic.variables):
             target.assign(self.tau * current + (1 - self.tau) * target)
 
     def save_models(self):
