@@ -148,7 +148,7 @@ class Agent:
         actor_network_gradient = tape.gradient(actor_loss, self.actor.trainable_variables)
         self.actor.optimizer.apply_gradients(zip(actor_network_gradient, self.actor.trainable_variables))
 
-        self.update_network_parameters()
+        self.update_target_networks()
 
     @tf.function
     def update_network_parameters(self, tau=None):
@@ -169,10 +169,10 @@ class Agent:
 
     @tf.function
     def update_target_networks(self):
-        for target, current in zip(self.target_actor.variables, self.actor.variables):
+        for target, current in zip(self.target_actor.trainable_variables, self.actor.trainable_variables):
             target.assign(self.tau * current + (1 - self.tau) * target)
 
-        for target, current in zip(self.target_critic.variables, self.critic.variables):
+        for target, current in zip(self.target_critic.trainable_variables, self.critic.trainable_variables):
             target.assign(self.tau * current + (1 - self.tau) * target)
 
     def save_models(self):

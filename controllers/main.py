@@ -32,7 +32,7 @@ def plot_scores(episodes, scores, avg_scores, save_path):
         plt.savefig(os.path.join(save_path, 'history.png'))
 
 if __name__ == '__main__':
-    SIMULATION_STEP_DELAY = 500
+    SIMULATION_STEP_DELAY = 300
     ROBOT_BASE_SPEED = 3
     SCREEN_DIVIDER = 3
 
@@ -42,16 +42,16 @@ if __name__ == '__main__':
 
     AGENT_PARAMS = {
         # YOU CAN CHANGE
-        "ACTOR_DIMS": [256,256],
-        "CRITIC_DIMS": [256,256],
+        "ACTOR_DIMS": [64,64],
+        "CRITIC_DIMS": [64,64],
         "BATCH_SIZE": 128,
         "BUFFER_MAX_SIZE": 10000,
         "GAMMA": 0.95,
-        "EPSILON": 0.4,
+        "EPSILON": 0.7,
         "MIN_EPSILON": 0.05,
         "TAU": 0.01,
         "LEARNING_RATE": 1e-5,
-        "L2_FACTOR": 1e-4,
+        "L2_FACTOR": 1e-2,
         # DON'T CHANGE
         "N_ACTIONS": 3,
         "STATE_SHAPE": (640 // SCREEN_DIVIDER + 1 if 640 % SCREEN_DIVIDER != 0 else 640 // SCREEN_DIVIDER,),
@@ -69,7 +69,7 @@ if __name__ == '__main__':
     actor_loss_history = []
     critic_loss_history = []
 
-    #agent.load_models()
+    agent.load_models()
 
     if LOAD_CHECKPOINT:
         agent.load_models()
