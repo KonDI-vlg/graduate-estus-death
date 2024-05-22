@@ -1,9 +1,6 @@
 import os
-os.environ["WEBOTS_HOME"] = "/Applications/Webots.app"
+os.environ["WEBOTS_HOME"] = "Z:\Webots"
 from controller import Supervisor
-import tensorflow as tf
-import tensorflow_probability as tfp
-
 
 class RobotController:
     def __init__(self, simulation_delay, robot_base_speed, screen_divider):

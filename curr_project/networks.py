@@ -2,8 +2,7 @@ import os
 import tensorflow as tf
 import tensorflow.keras as keras
 from tensorflow.keras.layers import Dense, Dropout
-from tensorflow.keras.regularizers import l2
-import tensorflow_probability as tfp
+from tensorflow.keras.regularizers import L2
 from tensorflow.keras.optimizers import Adam
 import numpy as np
 
@@ -45,28 +44,37 @@ class ReplayBuffer:
         return states, actions, rewards, states_, dones
 
 class ActorNetwork(keras.Model):
-    def __init__(self, n_actions=3, dense1_dims=128, dense2_dims=128, l2_factor=0.01):
+    def __init__(self, n_actions=3, dense1_dims=128, dense2_dims=128, l2_factor=0.01, drop_factor=0.2):
         super(ActorNetwork, self).__init__()
-        self.dense1 = Dense(dense1_dims, activation='sigmoid', kernel_regularizer=l2(l2_factor))
-        self.dense2 = Dense(dense2_dims, activation='sigmoid', kernel_regularizer=l2(l2_factor))
+        self.dense1 = Dense(dense1_dims, activation='sigmoid', kernel_regularizer=L2(l2_factor))
+        self.drop1 = Dropout(drop_factor)
+        self.dense2 = Dense(dense2_dims, activation='sigmoid', kernel_regularizer=L2(l2_factor))
+        self.drop2 = Dropout(drop_factor)
         self.mu = Dense(n_actions, activation='softmax')
 
     def call(self, state):
         prob = self.dense1(state)
+        prob = self.drop1(prob)
         prob = self.dense2(prob)
+        prob = self.drop2(prob)
+
         mu = self.mu(prob)
         return mu
     
 class CriticNetwork(keras.Model):
-    def __init__(self, dense1_dims=128, dense2_dims=128, l2_factor=0.01):
+    def __init__(self, dense1_dims=128, dense2_dims=128, l2_factor=0.01, drop_factor=0.2):
         super(CriticNetwork, self).__init__()
-        self.dense1 = Dense(dense1_dims, activation='sigmoid', kernel_regularizer=l2(l2_factor))
-        self.dense2 = Dense(dense2_dims, activation='sigmoid', kernel_regularizer=l2(l2_factor))
+        self.dense1 = Dense(dense1_dims, activation='sigmoid', kernel_regularizer=L2(l2_factor))
+        self.drop1 = Dropout(drop_factor)
+        self.dense2 = Dense(dense2_dims, activation='sigmoid', kernel_regularizer=L2(l2_factor))
+        self.drop2 = Dropout(drop_factor)
         self.q_value = Dense(1, activation=None)
 
     def call(self, state, action):
         action_value = self.dense1(tf.concat([state,action], axis=1))
+        action_value = self.drop1(action_value)
         action_value = self.dense2(action_value)
+        action_value = self.drop2(action_value)
         q_value = self.q_value(action_value)
         return q_value
 
@@ -82,22 +90,22 @@ class Agent:
         self.critic_dims = params['CRITIC_DIMS']
 
         self.batch_size = params['BATCH_SIZE']
-        self.buffer_max_size = params['BUFFER_MAX_SIZE']
+        self.buffer_max_size = self.batch_size * 64
         self.n_actions = params['N_ACTIONS']
         self.memory = ReplayBuffer(self.buffer_max_size, params['STATE_SHAPE'], self.n_actions)
 
-        self.actor = ActorNetwork(self.n_actions, self.actor_dims[0], self.actor_dims[1], self.l2_factor) # self.n_actions, self.actor_dims[0], self.actor_dims[1], self.l2_factor
-        self.critic = CriticNetwork(self.critic_dims[0], self.critic_dims[1], self.l2_factor) # self.critic_dims[0], self.critic_dims[1], self.l2_factor
-        self.target_actor = ActorNetwork(self.n_actions, self.actor_dims[0], self.actor_dims[1], self.l2_factor)
-        self.target_critic = CriticNetwork(self.critic_dims[0], self.critic_dims[1], self.l2_factor)
-        self.target_actor.set_weights(self.actor.get_weights())
-        self.target_critic.set_weights(self.critic.get_weights())
+        self.actor = ActorNetwork(self.n_actions, self.actor_dims[0], self.actor_dims[1], self.l2_factor, params["DROPOUT"]) # self.n_actions, self.actor_dims[0], self.actor_dims[1], self.l2_factor
+        self.critic = CriticNetwork(self.critic_dims[0], self.critic_dims[1], self.l2_factor, params["DROPOUT"]) # self.critic_dims[0], self.critic_dims[1], self.l2_factor
+        self.target_actor = ActorNetwork(self.n_actions, self.actor_dims[0], self.actor_dims[1], self.l2_factor, params["DROPOUT"])
+        self.target_critic = CriticNetwork(self.critic_dims[0], self.critic_dims[1], self.l2_factor, params["DROPOUT"])
         
         self.actor.compile(optimizer=Adam(learning_rate=self.learning_rate))
         self.critic.compile(optimizer=Adam(learning_rate=self.learning_rate))
         self.target_actor.compile(optimizer=Adam(learning_rate=self.learning_rate))
         self.target_critic.compile(optimizer=Adam(learning_rate=self.learning_rate))
 
+        self.actor_loss = None
+        self.critic_loss = None
         self.chkpt_dir='tmp'
 
         self.update_network_parameters(tau=1)
@@ -149,6 +157,8 @@ class Agent:
         self.actor.optimizer.apply_gradients(zip(actor_network_gradient, self.actor.trainable_variables))
 
         self.update_target_networks()
+
+        return critic_loss, actor_loss
 
     @tf.function
     def update_network_parameters(self, tau=None):
