@@ -1,6 +1,7 @@
 import os
 import tensorflow as tf
-import tensorflow.keras as keras
+import tensorflow.keras
+import keras
 from tensorflow.keras.layers import Dense, Dropout
 from tensorflow.keras.regularizers import L2
 from tensorflow.keras.optimizers import Adam
@@ -44,8 +45,8 @@ class ReplayBuffer:
         return states, actions, rewards, states_, dones
 
 class ActorNetwork(keras.Model):
-    def __init__(self, n_actions=3, dense1_dims=128, dense2_dims=128, l2_factor=0.01, drop_factor=0.2):
-        super(ActorNetwork, self).__init__()
+    def __init__(self, n_actions=3, dense1_dims=128, dense2_dims=128, l2_factor=0.01, drop_factor=0.2, **kwargs):
+        super(ActorNetwork, self).__init__(**kwargs)
         self.dense1 = Dense(dense1_dims, activation='sigmoid', kernel_regularizer=L2(l2_factor))
         self.drop1 = Dropout(drop_factor)
         self.dense2 = Dense(dense2_dims, activation='sigmoid', kernel_regularizer=L2(l2_factor))
@@ -61,9 +62,24 @@ class ActorNetwork(keras.Model):
         mu = self.mu(prob)
         return mu
     
+    def get_config(self):
+        config = super(ActorNetwork, self).get_config()
+        config.update({
+            'n_actions': self.mu.units,
+            'dense1_dims': self.dense1.units,
+            'dense2_dims': self.dense2.units,
+            'l2_factor': self.dense1.kernel_regularizer.l2,
+            'drop_factor': self.drop1.rate,
+        })
+        return config
+    
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
+    
 class CriticNetwork(keras.Model):
-    def __init__(self, dense1_dims=128, dense2_dims=128, l2_factor=0.01, drop_factor=0.2):
-        super(CriticNetwork, self).__init__()
+    def __init__(self, dense1_dims=128, dense2_dims=128, l2_factor=0.01, drop_factor=0.2, **kwargs):
+        super(CriticNetwork, self).__init__(**kwargs)
         self.dense1 = Dense(dense1_dims, activation='sigmoid', kernel_regularizer=L2(l2_factor))
         self.drop1 = Dropout(drop_factor)
         self.dense2 = Dense(dense2_dims, activation='sigmoid', kernel_regularizer=L2(l2_factor))
@@ -77,6 +93,20 @@ class CriticNetwork(keras.Model):
         action_value = self.drop2(action_value)
         q_value = self.q_value(action_value)
         return q_value
+    
+    def get_config(self):
+        config = super(CriticNetwork, self).get_config()
+        config.update({
+            'dense1_dims': self.dense1.units,
+            'dense2_dims': self.dense2.units,
+            'l2_factor': self.dense1.kernel_regularizer.l2,
+            'drop_factor': self.drop1.rate,
+        })
+        return config
+    
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
 
 class Agent:
     def __init__(self, params):
@@ -187,14 +217,14 @@ class Agent:
 
     def save_models(self):
         print('... saving models ...')
-        self.actor.save_weights(os.path.join(self.chkpt_dir, 'actor.weights.h5'))
-        self.critic.save_weights(os.path.join(self.chkpt_dir, 'critic.weights.h5'))
-        self.target_actor.save_weights(os.path.join(self.chkpt_dir, 'target_actor.weights.h5'))
-        self.target_critic.save_weights(os.path.join(self.chkpt_dir, 'target_critic.weights.h5'))
+        self.actor.save(os.path.join(self.chkpt_dir, 'actor.keras'))
+        self.critic.save(os.path.join(self.chkpt_dir, 'critic.keras'))
+        self.target_actor.save(os.path.join(self.chkpt_dir, 'target_actor.keras'))
+        self.target_critic.save(os.path.join(self.chkpt_dir, 'target_critic.keras'))
     
     def load_models(self):
         print('... loading models ...')
-        self.actor.load_weights(os.path.join(self.chkpt_dir, 'actor.weights.h5'))
-        self.critic.load_weights(os.path.join(self.chkpt_dir, 'critic.weights.h5'))
-        self.target_actor.load_weights(os.path.join(self.chkpt_dir, 'target_actor.weights.h5'))
-        self.target_critic.load_weights(os.path.join(self.chkpt_dir, 'target_critic.weights.h5'))
+        self.actor = keras.models.load_model(os.path.join(self.chkpt_dir, 'actor.keras'), custom_objects={'ActorNetwork': ActorNetwork})
+        self.critic = keras.models.load_model(os.path.join(self.chkpt_dir, 'critic.keras'), custom_objects={'CriticNetwork': CriticNetwork})
+        self.target_actor = keras.models.load_model(os.path.join(self.chkpt_dir, 'target_actor.keras'), custom_objects={'ActorNetwork': ActorNetwork})
+        self.target_critic = keras.models.load_model(os.path.join(self.chkpt_dir, 'target_critic.keras'), custom_objects={'CriticNetwork': CriticNetwork})

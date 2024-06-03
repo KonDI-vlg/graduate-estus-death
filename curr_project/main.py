@@ -55,12 +55,12 @@ if __name__ == '__main__':
 
     N_EPISODES = 2000
     MAX_STEPS = 1000
-    LOAD_CHECKPOINT = False
+    LOAD_CHECKPOINT = True
 
     AGENT_PARAMS = {
         # YOU CAN CHANGE
-        "ACTOR_DIMS": [128,128],
-        "CRITIC_DIMS": [128,128],
+        "ACTOR_DIMS": [256,128],
+        "CRITIC_DIMS": [256,128],
         "BATCH_SIZE": 128,
         "GAMMA": 0.95,
         "EPSILON": 0,
