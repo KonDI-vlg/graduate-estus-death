@@ -45,12 +45,13 @@ class ReplayBuffer:
         return states, actions, rewards, states_, dones
 
 class ActorNetwork(keras.Model):
-    def __init__(self, n_actions=3, dense1_dims=128, dense2_dims=128, l2_factor=0.01, drop_factor=0.2, **kwargs):
+    def __init__(self, n_actions=3, dense1_dims=128, dense2_dims=128, dense3_dims=64, l2_factor=0.01, drop_factor=0.2, **kwargs):
         super(ActorNetwork, self).__init__(**kwargs)
-        self.dense1 = Dense(dense1_dims, activation='sigmoid', kernel_regularizer=L2(l2_factor))
+        self.dense1 = Dense(dense1_dims, activation='relu', kernel_regularizer=L2(l2_factor))
         self.drop1 = Dropout(drop_factor)
-        self.dense2 = Dense(dense2_dims, activation='sigmoid', kernel_regularizer=L2(l2_factor))
+        self.dense2 = Dense(dense2_dims, activation='relu', kernel_regularizer=L2(l2_factor))
         self.drop2 = Dropout(drop_factor)
+        self.dense3 = Dense(dense3_dims, activation='relu', kernel_regularizer=L2(l2_factor))
         self.mu = Dense(n_actions, activation='softmax')
 
     def call(self, state):
@@ -58,6 +59,7 @@ class ActorNetwork(keras.Model):
         prob = self.drop1(prob)
         prob = self.dense2(prob)
         prob = self.drop2(prob)
+        prob = self.dense3(prob)
 
         mu = self.mu(prob)
         return mu
@@ -68,6 +70,7 @@ class ActorNetwork(keras.Model):
             'n_actions': self.mu.units,
             'dense1_dims': self.dense1.units,
             'dense2_dims': self.dense2.units,
+            'dense3_dims': self.dense3.units,
             'l2_factor': self.dense1.kernel_regularizer.l2,
             'drop_factor': self.drop1.rate,
         })
@@ -78,12 +81,13 @@ class ActorNetwork(keras.Model):
         return cls(**config)
     
 class CriticNetwork(keras.Model):
-    def __init__(self, dense1_dims=128, dense2_dims=128, l2_factor=0.01, drop_factor=0.2, **kwargs):
+    def __init__(self, dense1_dims=128, dense2_dims=128, dense3_dims=64, l2_factor=0.01, drop_factor=0.2, **kwargs):
         super(CriticNetwork, self).__init__(**kwargs)
-        self.dense1 = Dense(dense1_dims, activation='sigmoid', kernel_regularizer=L2(l2_factor))
+        self.dense1 = Dense(dense1_dims, activation='relu', kernel_regularizer=L2(l2_factor))
         self.drop1 = Dropout(drop_factor)
-        self.dense2 = Dense(dense2_dims, activation='sigmoid', kernel_regularizer=L2(l2_factor))
+        self.dense2 = Dense(dense2_dims, activation='relu', kernel_regularizer=L2(l2_factor))
         self.drop2 = Dropout(drop_factor)
+        self.dense3 = Dense(dense3_dims, activation='relu', kernel_regularizer=L2(l2_factor))
         self.q_value = Dense(1, activation=None)
 
     def call(self, state, action):
@@ -91,6 +95,7 @@ class CriticNetwork(keras.Model):
         action_value = self.drop1(action_value)
         action_value = self.dense2(action_value)
         action_value = self.drop2(action_value)
+        action_value = self.dense3(action_value)
         q_value = self.q_value(action_value)
         return q_value
     
@@ -99,6 +104,7 @@ class CriticNetwork(keras.Model):
         config.update({
             'dense1_dims': self.dense1.units,
             'dense2_dims': self.dense2.units,
+            'dense3_dims': self.dense3.units,
             'l2_factor': self.dense1.kernel_regularizer.l2,
             'drop_factor': self.drop1.rate,
         })
@@ -120,19 +126,19 @@ class Agent:
         self.critic_dims = params['CRITIC_DIMS']
 
         self.batch_size = params['BATCH_SIZE']
-        self.buffer_max_size = self.batch_size * 64
+        self.buffer_max_size = 100000
         self.n_actions = params['N_ACTIONS']
         self.memory = ReplayBuffer(self.buffer_max_size, params['STATE_SHAPE'], self.n_actions)
 
-        self.actor = ActorNetwork(self.n_actions, self.actor_dims[0], self.actor_dims[1], self.l2_factor, params["DROPOUT"]) # self.n_actions, self.actor_dims[0], self.actor_dims[1], self.l2_factor
-        self.critic = CriticNetwork(self.critic_dims[0], self.critic_dims[1], self.l2_factor, params["DROPOUT"]) # self.critic_dims[0], self.critic_dims[1], self.l2_factor
-        self.target_actor = ActorNetwork(self.n_actions, self.actor_dims[0], self.actor_dims[1], self.l2_factor, params["DROPOUT"])
-        self.target_critic = CriticNetwork(self.critic_dims[0], self.critic_dims[1], self.l2_factor, params["DROPOUT"])
+        self.actor = ActorNetwork(self.n_actions, self.actor_dims[0], self.actor_dims[1], self.actor_dims[2], self.l2_factor, params["DROPOUT"]) # self.n_actions, self.actor_dims[0], self.actor_dims[1], self.l2_factor
+        self.critic = CriticNetwork(self.critic_dims[0], self.critic_dims[1], self.critic_dims[2], self.l2_factor, params["DROPOUT"]) # self.critic_dims[0], self.critic_dims[1], self.l2_factor
+        self.target_actor = ActorNetwork(self.n_actions, self.actor_dims[0], self.actor_dims[1], self.actor_dims[2], self.l2_factor, params["DROPOUT"])
+        self.target_critic = CriticNetwork(self.critic_dims[0], self.critic_dims[1], self.critic_dims[2], self.l2_factor, params["DROPOUT"])
         
         self.actor.compile(optimizer=Adam(learning_rate=self.learning_rate))
-        self.critic.compile(optimizer=Adam(learning_rate=self.learning_rate))
+        self.critic.compile(optimizer=Adam(learning_rate=self.learning_rate*2))
         self.target_actor.compile(optimizer=Adam(learning_rate=self.learning_rate))
-        self.target_critic.compile(optimizer=Adam(learning_rate=self.learning_rate))
+        self.target_critic.compile(optimizer=Adam(learning_rate=self.learning_rate*2))
 
         self.actor_loss = None
         self.critic_loss = None

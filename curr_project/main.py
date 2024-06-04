@@ -10,35 +10,41 @@ import matplotlib
 matplotlib.use('Qt5Agg')
 import matplotlib.pyplot as plt
 
-def plot_scores(episodes, scores, avg_scores, actor_losses, critic_losses, save_path):
+def plot_scores(episodes, scores, avg_scores, actor_losses, critic_losses, elapsed_time, save_path):
     plt.figure(1)
     plt.clf()
 
     # Подграфик для очков
-    plt.subplot(4, 1, 1)
+    plt.subplot(5, 1, 1)
     plt.plot(episodes, scores, label='Score')
     plt.xlabel('Episode')
     plt.ylabel('Score')
     plt.legend()
 
     # Подграфик для средних очков
-    plt.subplot(4, 1, 2)
+    plt.subplot(5, 1, 2)
     plt.plot(episodes, avg_scores, label='Avg Score', color='orange')
     plt.xlabel('Episode')
     plt.ylabel('Avg Score (Last 100)')
     plt.legend()
 
     # Новый график для потерь актера и критика на одной плоскости
-    plt.subplot(4, 1, 3)
+    plt.subplot(5, 1, 4)
     plt.plot(episodes, actor_losses, label='Actor Loss', color='red')
     plt.xlabel('Episode')
     plt.ylabel('Loss')
     plt.legend()
 
-    plt.subplot(4, 1, 4)
+    plt.subplot(5, 1, 5)
     plt.plot(episodes, critic_losses, label='Critic Loss', color='blue')
     plt.xlabel('Episode')
     plt.ylabel('Loss')
+    plt.legend()
+
+    plt.subplot(5, 1, 3)
+    plt.plot(episodes, elapsed_time, label='Time', color='green')
+    plt.xlabel('Episode')
+    plt.ylabel('Time for EP')
     plt.legend()
     
     plt.tight_layout()
@@ -51,22 +57,22 @@ def plot_scores(episodes, scores, avg_scores, actor_losses, critic_losses, save_
 if __name__ == '__main__':
     SIMULATION_STEP_DELAY = 300
     ROBOT_BASE_SPEED = 3
-    SCREEN_DIVIDER = 3
+    SCREEN_DIVIDER = 58
 
     N_EPISODES = 2000
     MAX_STEPS = 1000
-    LOAD_CHECKPOINT = True
+    LOAD_CHECKPOINT = False
 
     AGENT_PARAMS = {
         # YOU CAN CHANGE
-        "ACTOR_DIMS": [256,128],
-        "CRITIC_DIMS": [256,128],
-        "BATCH_SIZE": 128,
-        "GAMMA": 0.95,
-        "EPSILON": 0,
+        "ACTOR_DIMS": [128,256,128],
+        "CRITIC_DIMS": [128,256,128],
+        "BATCH_SIZE": 32,
+        "GAMMA": 0.98,
+        "EPSILON": 1,
         "MIN_EPSILON": 0,
         "TAU": 0.01,
-        "LEARNING_RATE": 1e-3,
+        "LEARNING_RATE": 1e-4,
         "L2_FACTOR": 1e-3,
         "DROPOUT": 0.2,
         # DON'T CHANGE
@@ -85,6 +91,7 @@ if __name__ == '__main__':
     avg_scores = []
     actor_loss_history = []
     critic_loss_history = []
+    elapsed_time_history = []
     CL, AL = 0, 0
 
     #agent.load_models()
@@ -98,8 +105,9 @@ if __name__ == '__main__':
         done = False
         steps = 0
         score = 0
+        start = time.time()
         if not LOAD_CHECKPOINT:
-            agent.epsilon = max(AGENT_PARAMS['EPSILON'] * 0.9995**i, AGENT_PARAMS['MIN_EPSILON'])
+            agent.epsilon = max(AGENT_PARAMS['EPSILON'] * 0.9**i, AGENT_PARAMS['MIN_EPSILON'])
         while not done:
             action = agent.choose_action(observation)
 
@@ -126,14 +134,15 @@ if __name__ == '__main__':
         avg_scores.append(avg_score)
         actor_loss_history.append(AL)
         critic_loss_history.append(AL)
+        elapsed_time_history.append(time.time() - start)
 
         if avg_score > best_score:
             best_score = avg_score
             if not LOAD_CHECKPOINT:
                 agent.save_models()
 
-        if (i+1) % 300 == 0:
-            plot_scores(range(1,i+2), score_history, avg_scores, actor_loss_history, critic_loss_history, agent.chkpt_dir)
+        if (i+1) % 5 == 0:
+            plot_scores(range(1,i+2), score_history, avg_scores, actor_loss_history, critic_loss_history, elapsed_time_history, agent.chkpt_dir)
 
         if i % 100 == 0:
             n = round(time.time() - start, 0)
